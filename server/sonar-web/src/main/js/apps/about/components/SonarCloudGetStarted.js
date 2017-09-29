@@ -21,6 +21,7 @@
 import React from 'react';
 import OAuthProviders from '../../sessions/components/OAuthProviders';
 import { getIdentityProviders } from '../../../api/users';
+import { getBaseUrl } from '../../../helpers/urls';
 
 /*::
 type State = {
@@ -71,6 +72,7 @@ export default class SonarCloudGetStarted extends React.PureComponent {
         <OAuthProviders
           formatLabel={this.formatLabel}
           identityProviders={this.state.identityProviders}
+          returnTo={getBaseUrl() + '/'}
         />
       </div>
     );
