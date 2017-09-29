@@ -19,9 +19,18 @@
  */
 package org.sonar.server.authentication;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.when;
+import static org.sonar.server.authentication.event.AuthenticationEvent.Source;
+
 import javax.servlet.FilterChain;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -35,14 +44,6 @@ import org.sonar.api.utils.log.LogTester;
 import org.sonar.api.utils.log.LoggerLevel;
 import org.sonar.server.authentication.event.AuthenticationEvent;
 import org.sonar.server.authentication.event.AuthenticationException;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
-import static org.mockito.Mockito.when;
-import static org.sonar.server.authentication.event.AuthenticationEvent.Source;
 
 public class OAuth2CallbackFilterTest {
 
@@ -65,10 +66,11 @@ public class OAuth2CallbackFilterTest {
 
   private FakeOAuth2IdentityProvider oAuth2IdentityProvider = new WellbehaveFakeOAuth2IdentityProvider(OAUTH2_PROVIDER_KEY, true, LOGIN);
   private AuthenticationEvent authenticationEvent = mock(AuthenticationEvent.class);
+  private OAuth2Redirection oAuthRedirection = mock(OAuth2Redirection.class);
 
   private ArgumentCaptor<AuthenticationException> authenticationExceptionCaptor = ArgumentCaptor.forClass(AuthenticationException.class);
 
-  private OAuth2CallbackFilter underTest = new OAuth2CallbackFilter(identityProviderRepository, oAuth2ContextFactory, server, authenticationEvent);
+  private OAuth2CallbackFilter underTest = new OAuth2CallbackFilter(identityProviderRepository, oAuth2ContextFactory, server, authenticationEvent, oAuthRedirection);
 
   @Before
   public void setUp() throws Exception {
@@ -164,6 +166,7 @@ public class OAuth2CallbackFilterTest {
     assertThat(authenticationException.getSource()).isEqualTo(Source.oauth2(identityProvider));
     assertThat(authenticationException.getLogin()).isNull();
     assertThat(authenticationException.getPublicMessage()).isEqualTo("Email john@email.com is already used");
+    verify(oAuthRedirection).delete(eq(request), eq(response));
   }
 
   @Test
@@ -180,6 +183,24 @@ public class OAuth2CallbackFilterTest {
     underTest.doFilter(request, response, chain);
 
     verify(response).sendRedirect("/sonarqube/sessions/unauthorized?message=Email+john%40email.com+is+already+used");
+    verify(oAuthRedirection).delete(eq(request), eq(response));
+  }
+
+  @Test
+  public void redirect_when_failing_because_of_Exception() throws Exception {
+    FailWithIllegalStateException identityProvider = new FailWithIllegalStateException();
+    identityProvider
+      .setKey("failing")
+      .setName("name of failing")
+      .setEnabled(true);
+    when(request.getRequestURI()).thenReturn("/oauth2/callback/" + identityProvider.getKey());
+    identityProviderRepository.addIdentityProvider(identityProvider);
+
+    underTest.doFilter(request, response, chain);
+
+    verify(response).sendRedirect("/sessions/unauthorized");
+    assertThat(logTester.logs(LoggerLevel.ERROR)).containsExactlyInAnyOrder("Fail to callback authentication with 'failing'");
+    verify(oAuthRedirection).delete(eq(request), eq(response));
   }
 
   @Test
@@ -213,6 +234,19 @@ public class OAuth2CallbackFilterTest {
     @Override
     public void callback(CallbackContext context) {
       throw new UnauthorizedException("Email john@email.com is already used");
+    }
+  }
+
+  private static class FailWithIllegalStateException extends TestIdentityProvider implements OAuth2IdentityProvider {
+
+    @Override
+    public void init(InitContext context) {
+
+    }
+
+    @Override
+    public void callback(CallbackContext context) {
+      throw new IllegalStateException("Failure !");
     }
   }
 

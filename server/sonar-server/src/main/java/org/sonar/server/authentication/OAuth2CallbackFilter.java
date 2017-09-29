@@ -19,7 +19,13 @@
  */
 package org.sonar.server.authentication;
 
+import static java.lang.String.format;
+import static org.sonar.server.authentication.AuthenticationError.handleAuthenticationError;
+import static org.sonar.server.authentication.AuthenticationError.handleError;
+import static org.sonar.server.authentication.event.AuthenticationEvent.Source;
+
 import java.io.IOException;
+
 import javax.annotation.CheckForNull;
 import javax.servlet.FilterChain;
 import javax.servlet.FilterConfig;
@@ -28,6 +34,7 @@ import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
 import org.sonar.api.platform.Server;
 import org.sonar.api.server.authentication.IdentityProvider;
 import org.sonar.api.server.authentication.OAuth2IdentityProvider;
@@ -36,21 +43,18 @@ import org.sonar.api.server.authentication.UserIdentity;
 import org.sonar.server.authentication.event.AuthenticationEvent;
 import org.sonar.server.authentication.event.AuthenticationException;
 
-import static java.lang.String.format;
-import static org.sonar.server.authentication.AuthenticationError.handleAuthenticationError;
-import static org.sonar.server.authentication.AuthenticationError.handleError;
-import static org.sonar.server.authentication.event.AuthenticationEvent.Source;
-
 public class OAuth2CallbackFilter extends AuthenticationFilter {
 
   private final OAuth2ContextFactory oAuth2ContextFactory;
   private final AuthenticationEvent authenticationEvent;
+  private final OAuth2Redirection oAuthRedirection;
 
   public OAuth2CallbackFilter(IdentityProviderRepository identityProviderRepository, OAuth2ContextFactory oAuth2ContextFactory,
-    Server server, AuthenticationEvent authenticationEvent) {
+    Server server, AuthenticationEvent authenticationEvent, OAuth2Redirection oAuthRedirection) {
     super(server, identityProviderRepository);
     this.oAuth2ContextFactory = oAuth2ContextFactory;
     this.authenticationEvent = authenticationEvent;
+    this.oAuthRedirection = oAuthRedirection;
   }
 
   @Override
@@ -77,9 +81,11 @@ public class OAuth2CallbackFilter extends AuthenticationFilter {
         handleError(response, format("Not an OAuth2IdentityProvider: %s", provider.getClass()));
       }
     } catch (AuthenticationException e) {
+      oAuthRedirection.delete(request, response);
       authenticationEvent.loginFailure(request, e);
       handleAuthenticationError(e, response, getContextPath());
     } catch (Exception e) {
+      oAuthRedirection.delete(request, response);
       handleError(e, response, format("Fail to callback authentication with '%s'", provider.getKey()));
     }
   }

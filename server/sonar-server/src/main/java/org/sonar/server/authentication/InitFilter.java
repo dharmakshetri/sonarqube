@@ -19,7 +19,13 @@
  */
 package org.sonar.server.authentication;
 
+import static java.lang.String.format;
+import static org.sonar.server.authentication.AuthenticationError.handleAuthenticationError;
+import static org.sonar.server.authentication.AuthenticationError.handleError;
+import static org.sonar.server.authentication.event.AuthenticationEvent.Source;
+
 import java.io.IOException;
+
 import javax.servlet.FilterChain;
 import javax.servlet.FilterConfig;
 import javax.servlet.ServletException;
@@ -27,6 +33,7 @@ import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
 import org.sonar.api.platform.Server;
 import org.sonar.api.server.authentication.BaseIdentityProvider;
 import org.sonar.api.server.authentication.IdentityProvider;
@@ -35,11 +42,6 @@ import org.sonar.api.server.authentication.UnauthorizedException;
 import org.sonar.server.authentication.event.AuthenticationEvent;
 import org.sonar.server.authentication.event.AuthenticationException;
 
-import static java.lang.String.format;
-import static org.sonar.server.authentication.AuthenticationError.handleAuthenticationError;
-import static org.sonar.server.authentication.AuthenticationError.handleError;
-import static org.sonar.server.authentication.event.AuthenticationEvent.Source;
-
 public class InitFilter extends AuthenticationFilter {
 
   private static final String INIT_CONTEXT = "/sessions/init/";
@@ -47,13 +49,15 @@ public class InitFilter extends AuthenticationFilter {
   private final BaseContextFactory baseContextFactory;
   private final OAuth2ContextFactory oAuth2ContextFactory;
   private final AuthenticationEvent authenticationEvent;
+  private final OAuth2Redirection oAuthRedirection;
 
   public InitFilter(IdentityProviderRepository identityProviderRepository, BaseContextFactory baseContextFactory,
-    OAuth2ContextFactory oAuth2ContextFactory, Server server, AuthenticationEvent authenticationEvent) {
+    OAuth2ContextFactory oAuth2ContextFactory, Server server, AuthenticationEvent authenticationEvent, OAuth2Redirection oAuthRedirection) {
     super(server, identityProviderRepository);
     this.baseContextFactory = baseContextFactory;
     this.oAuth2ContextFactory = oAuth2ContextFactory;
     this.authenticationEvent = authenticationEvent;
+    this.oAuthRedirection = oAuthRedirection;
   }
 
   @Override
@@ -82,9 +86,11 @@ public class InitFilter extends AuthenticationFilter {
         handleError(response, format("Unsupported IdentityProvider class: %s", provider.getClass()));
       }
     } catch (AuthenticationException e) {
+      oAuthRedirection.delete(request, response);
       authenticationEvent.loginFailure(request, e);
       handleAuthenticationError(e, response, getContextPath());
     } catch (Exception e) {
+      oAuthRedirection.delete(request, response);
       handleError(e, response, format("Fail to initialize authentication with provider '%s'", provider.getKey()));
     }
   }
@@ -103,6 +109,7 @@ public class InitFilter extends AuthenticationFilter {
 
   private void handleOAuth2IdentityProvider(HttpServletRequest request, HttpServletResponse response, OAuth2IdentityProvider provider) {
     try {
+      oAuthRedirection.create(request, response);
       provider.init(oAuth2ContextFactory.newContext(request, response, provider));
     } catch (UnauthorizedException e) {
       throw AuthenticationException.newBuilder()

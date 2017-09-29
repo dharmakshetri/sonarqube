@@ -19,9 +19,15 @@
  */
 package org.sonar.server.authentication;
 
+import static java.lang.String.format;
+import static org.sonar.api.CoreProperties.SERVER_BASE_URL;
+import static org.sonar.server.authentication.OAuth2CallbackFilter.CALLBACK_PATH;
+
 import java.io.IOException;
+
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
 import org.sonar.api.platform.Server;
 import org.sonar.api.server.authentication.OAuth2IdentityProvider;
 import org.sonar.api.server.authentication.UserIdentity;
@@ -31,10 +37,6 @@ import org.sonar.server.authentication.event.AuthenticationEvent;
 import org.sonar.server.user.ThreadLocalUserSession;
 import org.sonar.server.user.UserSessionFactory;
 
-import static java.lang.String.format;
-import static org.sonar.api.CoreProperties.SERVER_BASE_URL;
-import static org.sonar.server.authentication.OAuth2CallbackFilter.CALLBACK_PATH;
-
 public class OAuth2ContextFactory {
 
   private final ThreadLocalUserSession threadLocalUserSession;
@@ -43,15 +45,17 @@ public class OAuth2ContextFactory {
   private final OAuthCsrfVerifier csrfVerifier;
   private final JwtHttpHandler jwtHttpHandler;
   private final UserSessionFactory userSessionFactory;
+  private final OAuth2Redirection oAuthRedirection;
 
   public OAuth2ContextFactory(ThreadLocalUserSession threadLocalUserSession, UserIdentityAuthenticator userIdentityAuthenticator, Server server,
-    OAuthCsrfVerifier csrfVerifier, JwtHttpHandler jwtHttpHandler, UserSessionFactory userSessionFactory) {
+    OAuthCsrfVerifier csrfVerifier, JwtHttpHandler jwtHttpHandler, UserSessionFactory userSessionFactory, OAuth2Redirection oAuthRedirection) {
     this.threadLocalUserSession = threadLocalUserSession;
     this.userIdentityAuthenticator = userIdentityAuthenticator;
     this.server = server;
     this.csrfVerifier = csrfVerifier;
     this.jwtHttpHandler = jwtHttpHandler;
     this.userSessionFactory = userSessionFactory;
+    this.oAuthRedirection = oAuthRedirection;
   }
 
   public OAuth2IdentityProvider.InitContext newContext(HttpServletRequest request, HttpServletResponse response, OAuth2IdentityProvider identityProvider) {
@@ -115,7 +119,9 @@ public class OAuth2ContextFactory {
     @Override
     public void redirectToRequestedPage() {
       try {
-        getResponse().sendRedirect(server.getContextPath() + "/");
+        String redirectTo = oAuthRedirection.getAndDelete(request, response);
+        String redirectToUrl = redirectTo == null ? "/" : redirectTo;
+        getResponse().sendRedirect(server.getContextPath() + redirectToUrl);
       } catch (IOException e) {
         throw new IllegalStateException("Fail to redirect to home", e);
       }

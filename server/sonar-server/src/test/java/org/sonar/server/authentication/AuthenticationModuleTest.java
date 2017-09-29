@@ -19,10 +19,10 @@
  */
 package org.sonar.server.authentication;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.Test;
 import org.sonar.core.platform.ComponentContainer;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 public class AuthenticationModuleTest {
 
@@ -30,7 +30,7 @@ public class AuthenticationModuleTest {
   public void verify_count_of_added_components() {
     ComponentContainer container = new ComponentContainer();
     new AuthenticationModule().configure(container);
-    assertThat(container.size()).isEqualTo(2 + 21);
+    assertThat(container.size()).isEqualTo(2 + 22);
   }
 
 }
