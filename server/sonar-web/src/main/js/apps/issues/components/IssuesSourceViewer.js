@@ -43,9 +43,12 @@ export default class IssuesSourceViewer extends React.PureComponent {
   /*:: props: Props; */
 
   componentDidUpdate(prevProps /*: Props */) {
+    const { openIssue, selectedLocationIndex } = this.props;
+    const shouldScrollBackToIssue =
+      selectedLocationIndex === -1 && selectedLocationIndex !== prevProps.selectedLocationIndex;
     if (
-      prevProps.openIssue !== this.props.openIssue &&
-      prevProps.openIssue.component === this.props.openIssue.component
+      prevProps.openIssue.component === openIssue.component &&
+      (prevProps.openIssue !== openIssue || shouldScrollBackToIssue)
     ) {
       this.scrollToIssue();
     }
@@ -80,6 +83,7 @@ export default class IssuesSourceViewer extends React.PureComponent {
     if (
       locations != null &&
       selectedLocationIndex != null &&
+      selectedLocationIndex >= 0 &&
       locations.length >= selectedLocationIndex
     ) {
       locationMessage = {
