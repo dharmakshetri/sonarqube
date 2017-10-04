@@ -55,6 +55,13 @@ public class QualityGateDetailsFormatter {
     ProjectStatusWsResponse.Status qualityGateStatus = measureLevelToQualityGateStatus(json.get("level").getAsString());
     projectStatusBuilder.setStatus(qualityGateStatus);
 
+    JsonElement ignoredConditions = json.get("ignoredConditions");
+    if (ignoredConditions != null) {
+      projectStatusBuilder.setIgnoredConditions(ignoredConditions.getAsBoolean());
+    } else {
+      projectStatusBuilder.setIgnoredConditions(false);
+    }
+
     formatConditions(json.getAsJsonArray("conditions"));
     formatPeriods();
 
